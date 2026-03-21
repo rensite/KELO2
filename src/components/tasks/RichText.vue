@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, reactive, onMounted } from 'vue'
 import { hashColor, hashColorLight } from '../../stores/utils.js'
 import { getUrlHostname, getFaviconUrl } from '../../composables/useTaskParser.js'
 import { ExternalLink } from 'lucide-vue-next'
@@ -83,6 +83,46 @@ const segments = computed(() => {
 const hasInlineTokens = computed(() => {
   return segments.value.some(s => s.type !== 'text')
 })
+
+// YouTube title cache
+const ytTitles = reactive({})
+const YT_CACHE_KEY = 'kelo_yt_titles'
+
+function isYouTubeUrl(url) {
+  return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/i.test(url)
+}
+
+function truncate(str, max = 30) {
+  return str.length > max ? str.slice(0, max) + '…' : str
+}
+
+function linkLabel(seg) {
+  return ytTitles[seg.value] ? truncate(ytTitles[seg.value]) : seg.hostname
+}
+
+onMounted(async () => {
+  // Load cached titles
+  try {
+    const cached = JSON.parse(localStorage.getItem(YT_CACHE_KEY) || '{}')
+    Object.assign(ytTitles, cached)
+  } catch {}
+
+  // Fetch missing YouTube titles
+  const links = segments.value.filter(s => s.type === 'link' && isYouTubeUrl(s.value) && !ytTitles[s.value])
+  for (const seg of links) {
+    try {
+      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(seg.value)}&format=json`)
+      if (res.ok) {
+        const data = await res.json()
+        ytTitles[seg.value] = data.title
+      }
+    } catch {}
+  }
+  // Persist cache
+  if (links.length) {
+    try { localStorage.setItem(YT_CACHE_KEY, JSON.stringify(ytTitles)) } catch {}
+  }
+})
 </script>
 
 <template>
@@ -112,7 +152,7 @@ const hasInlineTokens = computed(() => {
           alt=""
           loading="lazy"
         />
-        <span class="rt-link-host">{{ seg.hostname }}</span>
+        <span class="rt-link-host">{{ linkLabel(seg) }}</span>
         <ExternalLink :size="9" class="rt-link-external" />
       </a>
     </template>
@@ -177,7 +217,6 @@ const hasInlineTokens = computed(() => {
   margin: 0 2px;
   vertical-align: baseline;
   line-height: 1.5;
-  max-width: 200px;
   cursor: pointer;
   transition: all $transition-fast;
   
@@ -195,7 +234,6 @@ const hasInlineTokens = computed(() => {
 
 .rt-link-host {
   @include truncate;
-  max-width: 140px;
 }
 
 .rt-link-external {

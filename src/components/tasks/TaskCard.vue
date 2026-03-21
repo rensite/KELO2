@@ -300,7 +300,7 @@ function dueDateClass(iso) {
             @click.stop
           >
             <img :src="getFaviconUrl(link)" width="12" height="12" class="link-favicon" alt="" />
-            <span class="link-hostname">{{ linkTitles[link] || getUrlHostname(link) }}</span>
+            <span class="link-hostname">{{ (linkTitles[link] || getUrlHostname(link)).slice(0, 30) }}{{ (linkTitles[link] || '').length > 30 ? '…' : '' }}</span>
             <ExternalLink :size="10" class="link-external-icon" />
           </a>
         </div>
@@ -618,7 +618,6 @@ function dueDateClass(iso) {
     text-decoration: none;
     cursor: pointer;
     transition: all $transition-fast;
-    max-width: 200px;
 
     &:hover {
       background: rgba($blue-500, 0.16);
@@ -635,7 +634,6 @@ function dueDateClass(iso) {
 
 .link-hostname {
   @include truncate;
-  max-width: 140px;
 }
 
 .link-external-icon {
