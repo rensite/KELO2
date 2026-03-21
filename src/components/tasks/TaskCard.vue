@@ -7,11 +7,14 @@ import { usePomodoroStore } from '../../stores/pomodoro.js'
 import { useToast } from '../../composables/useToast.js'
 import { hashColor, hashColorLight } from '../../stores/utils.js'
 import { getUrlHostname, getFaviconUrl, parseTaskInput } from '../../composables/useTaskParser.js'
+import RichText from './RichText.vue'
+import TaskBlocks from './TaskBlocks.vue'
 import {
   Check, Trash2, GripVertical, Tag, CalendarDays,
   ChevronDown, ChevronRight, Plus, RotateCw, Timer,
   StickyNote, Edit3, Focus, MoreHorizontal, X,
-  AlertCircle, Circle, CheckCircle2, ExternalLink, Link2
+  AlertCircle, Circle, CheckCircle2, ExternalLink, Link2,
+  Paperclip, Layers
 } from 'lucide-vue-next'
 
 const props = defineProps({ task: Object })
@@ -24,12 +27,15 @@ const { undoToast } = useToast()
 
 const isEditing = ref(false)
 const editText = ref('')
-const showSubtasks = ref(false)
-const showNotes = ref(false)
-const newSubtaskText = ref('')
-const editNotes = ref('')
 const showMenu = ref(false)
+const confirmingDelete = ref(false)
+let confirmTimer = null
 const editInput = ref(null)
+
+const showBlocks = computed({
+  get: () => tasks.expandedTaskId === props.task.id,
+  set: (val) => { tasks.expandedTaskId = val ? props.task.id : null }
+})
 
 function reconstructFullText(task) {
   let parts = [task.text]
@@ -72,6 +78,13 @@ function toggleComplete() {
 }
 
 function deleteTask() {
+  if (!confirmingDelete.value) {
+    confirmingDelete.value = true
+    clearTimeout(confirmTimer)
+    confirmTimer = setTimeout(() => { confirmingDelete.value = false }, 2000)
+    return
+  }
+  confirmingDelete.value = false
   const taskCopy = { ...props.task }
   const idx = tasks.items.findIndex(t => t.id === props.task.id)
   tasks.deleteTask(props.task.id)
@@ -82,23 +95,7 @@ function deleteTask() {
   })
 }
 
-function addSubtask() {
-  if (newSubtaskText.value.trim()) {
-    tasks.addSubtask(props.task.id, newSubtaskText.value.trim())
-    newSubtaskText.value = ''
-  }
-}
 
-function toggleNotes() {
-  showNotes.value = !showNotes.value
-  if (showNotes.value) {
-    editNotes.value = props.task.notes || ''
-  }
-}
-
-function saveNotes() {
-  tasks.updateTask(props.task.id, { notes: editNotes.value })
-}
 
 function startFocus() {
   pomodoro.activeTaskId = props.task.id
@@ -120,10 +117,20 @@ function toggleUrgent() {
   showMenu.value = false
 }
 
-const subtaskProgress = computed(() => {
-  if (!props.task.subtasks?.length) return null
-  const done = props.task.subtasks.filter(s => s.completed).length
-  return { done, total: props.task.subtasks.length, pct: Math.round((done / props.task.subtasks.length) * 100) }
+// Block-based computed properties
+const textBlockProgress = computed(() => {
+  const textBlocks = props.task.blocks?.filter(b => b.type === 'text') || []
+  if (!textBlocks.length) return null
+  const done = textBlocks.filter(b => b.completed).length
+  return { done, total: textBlocks.length, pct: Math.round((done / textBlocks.length) * 100) }
+})
+
+const mediaBlockCount = computed(() => {
+  return props.task.blocks?.filter(b => b.type !== 'text').length || 0
+})
+
+const blockCount = computed(() => {
+  return props.task.blocks?.length || 0
 })
 
 function formatDueDate(iso) {
@@ -160,6 +167,7 @@ function dueDateClass(iso) {
       'has-notes': task.notes,
       'batch-selected': tasks.selectedTaskIds.includes(task.id),
       'menu-open': showMenu,
+      expanded: showBlocks,
       [`priority-${task.priority}`]: task.priority !== 'none',
     }"
   >
@@ -182,7 +190,7 @@ function dueDateClass(iso) {
       </button>
 
       <!-- Task content -->
-      <div class="task-content" @dblclick="startEdit">
+      <div class="task-content" @click="showBlocks = !showBlocks" @dblclick.stop="startEdit">
         <div v-if="isEditing" class="task-edit-row">
           <input
             v-model="editText"
@@ -195,11 +203,11 @@ function dueDateClass(iso) {
           />
         </div>
         <div v-else class="task-text-row">
-          <span class="task-text" :class="{ 'line-through': task.completed }">{{ task.text }}</span>
+          <RichText :text="task.text" :tags="task.tags" :links="task.links" :completed="task.completed" />
         </div>
 
         <!-- Metadata row -->
-        <div class="task-meta" v-if="task.tags?.length || task.dueDate || task.recurrence || subtaskProgress || task.links?.length">
+        <div class="task-meta" v-if="task.tags?.length || task.dueDate || task.recurrence || textBlockProgress || task.links?.length || mediaBlockCount">
           <span v-if="task.priority !== 'none'" class="meta-badge priority" :class="task.priority">
             <AlertCircle :size="11" />
             {{ task.priority }}
@@ -233,14 +241,15 @@ function dueDateClass(iso) {
             <RotateCw :size="11" />
             {{ task.recurrence }}
           </span>
-          <span v-if="subtaskProgress" class="meta-badge subtask-progress">
-            {{ subtaskProgress.done }}/{{ subtaskProgress.total }}
+          <span v-if="textBlockProgress" class="meta-badge subtask-progress" @click="showBlocks = !showBlocks" style="cursor: pointer;">
+            {{ textBlockProgress.done }}/{{ textBlockProgress.total }}
             <div class="mini-progress">
-              <div class="mini-progress-bar" :style="{ width: subtaskProgress.pct + '%' }" />
+              <div class="mini-progress-bar" :class="{ complete: textBlockProgress.pct === 100 }" :style="{ width: textBlockProgress.pct + '%' }" />
             </div>
           </span>
-          <span v-if="task.notes" class="meta-badge notes-indicator" @click="toggleNotes">
-            <StickyNote :size="11" />
+          <span v-if="mediaBlockCount" class="meta-badge attachment-count" @click="showBlocks = !showBlocks" style="cursor: pointer;">
+            <Paperclip :size="11" />
+            {{ mediaBlockCount }}
           </span>
         </div>
       </div>
@@ -250,80 +259,24 @@ function dueDateClass(iso) {
         <button class="action-btn" @click="startFocus" title="Focus mode">
           <Focus :size="15" />
         </button>
-        <button class="action-btn" @click="showSubtasks = !showSubtasks" title="Subtasks">
-          <component :is="showSubtasks ? ChevronDown : ChevronRight" :size="15" />
-        </button>
-        <button class="action-btn" @click="toggleNotes" title="Notes" :class="{ active: showNotes }">
-          <StickyNote :size="15" />
-        </button>
-        <div class="action-menu-wrapper">
-          <button class="action-btn" @click="showMenu = !showMenu" title="More">
-            <MoreHorizontal :size="15" />
-          </button>
-          <Transition name="scale">
-            <div v-if="showMenu" class="action-dropdown" @mouseleave="showMenu = false">
-              <button @click="startEdit"><Edit3 :size="14" /> Edit</button>
-              <button @click="setPriority('high')"><AlertCircle :size="14" style="color: #ef4444" /> High Priority</button>
-              <button @click="setPriority('medium')"><AlertCircle :size="14" style="color: #f97316" /> Medium Priority</button>
-              <button @click="setPriority('low')"><AlertCircle :size="14" style="color: #3b82f6" /> Low Priority</button>
-              <button @click="setPriority('none')"><Circle :size="14" /> No Priority</button>
-              <hr />
-              <button @click="setStatus('in_progress')"><Timer :size="14" /> In Progress</button>
-              <button @click="toggleUrgent">⚡ {{ task.isUrgent ? 'Remove Urgent' : 'Mark Urgent' }}</button>
-              <hr />
-              <button class="danger" @click="deleteTask"><Trash2 :size="14" /> Delete</button>
-            </div>
-          </Transition>
-        </div>
-        <button class="action-btn delete" @click="deleteTask" title="Delete">
+        <button
+          class="action-btn delete"
+          :class="{ confirming: confirmingDelete }"
+          @click="deleteTask"
+          :title="confirmingDelete ? 'Click again to delete' : 'Delete'"
+        >
           <Trash2 :size="15" />
         </button>
       </div>
     </div>
 
-    <!-- Subtasks -->
+    <!-- Blocks (unified subtasks + attachments) -->
     <Transition name="slide-down">
-      <div v-if="showSubtasks" class="subtasks-section">
-        <div
-          v-for="sub in task.subtasks"
-          :key="sub.id"
-          class="subtask-item"
-          :class="{ done: sub.completed }"
-        >
-          <button class="subtask-check" @click="tasks.toggleSubtask(task.id, sub.id)">
-            <CheckCircle2 v-if="sub.completed" :size="16" />
-            <Circle v-else :size="16" />
-          </button>
-          <span class="subtask-text" :class="{ 'line-through': sub.completed }">{{ sub.text }}</span>
-          <button class="subtask-delete" @click="tasks.deleteSubtask(task.id, sub.id)">
-            <X :size="13" />
-          </button>
-        </div>
-        <div class="subtask-add">
-          <input
-            v-model="newSubtaskText"
-            placeholder="Add subtask..."
-            class="subtask-input"
-            @keydown.enter="addSubtask"
-          />
-          <button class="subtask-add-btn" @click="addSubtask" :disabled="!newSubtaskText.trim()">
-            <Plus :size="14" />
-          </button>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- Notes -->
-    <Transition name="slide-down">
-      <div v-if="showNotes" class="notes-section">
-        <textarea
-          v-model="editNotes"
-          placeholder="Write notes in Markdown..."
-          class="notes-textarea"
-          @blur="saveNotes"
-          rows="4"
-        />
-      </div>
+      <TaskBlocks
+        v-if="showBlocks"
+        :taskId="task.id"
+        :blocks="task.blocks || []"
+      />
     </Transition>
   </div>
 </template>
@@ -364,8 +317,13 @@ function dueDateClass(iso) {
     box-shadow: $shadow-focus;
   }
 
-  &:hover .task-actions { opacity: 1; }
-  &:hover .drag-handle { opacity: 1; }
+  &.expanded {
+    border-color: rgba($violet-500, 0.4);
+    box-shadow: 0 0 0 2px rgba($violet-500, 0.08), $shadow-sm;
+  }
+
+  &:hover .task-actions { visibility: visible; }
+  &:hover .drag-handle { visibility: visible; }
 
   &.menu-open {
     z-index: $z-dropdown;
@@ -384,8 +342,7 @@ function dueDateClass(iso) {
   padding: $space-1 0;
   color: $color-text-muted;
   cursor: grab;
-  opacity: 0;
-  transition: opacity $transition-fast;
+  visibility: hidden;
   flex-shrink: 0;
   margin-top: 2px;
 
@@ -420,7 +377,7 @@ function dueDateClass(iso) {
 .task-content {
   flex: 1;
   min-width: 0;
-  cursor: default;
+  cursor: pointer;
 }
 
 .task-text {
@@ -486,13 +443,22 @@ function dueDateClass(iso) {
     background: $gray-100;
     color: $color-text-secondary;
     gap: 6px;
+    transition: all $transition-fast;
+    
+    &:hover {
+      background: rgba($violet-500, 0.1);
+      color: $color-primary;
+    }
   }
 
-  &.notes-indicator {
-    background: rgba($amber-500, 0.1);
-    color: $amber-500;
-    cursor: pointer;
-    &:hover { background: rgba($amber-500, 0.2); }
+  &.attachment-count {
+    background: rgba($blue-500, 0.08);
+    color: $blue-500;
+    transition: all $transition-fast;
+    
+    &:hover {
+      background: rgba($blue-500, 0.15);
+    }
   }
 
   &.link-badge {
@@ -536,17 +502,21 @@ function dueDateClass(iso) {
 
 .mini-progress-bar {
   height: 100%;
-  background: $color-success;
+  background: $color-primary;
   border-radius: 2px;
   transition: width $transition-base;
+  
+  &.complete {
+    background: $color-success;
+  }
 }
 
 .task-actions {
   display: flex;
   align-items: center;
   gap: 2px;
-  opacity: 0;
-  transition: opacity $transition-fast;
+  visibility: hidden;
+  transition: visibility 0s;
   flex-shrink: 0;
 }
 
@@ -557,6 +527,25 @@ function dueDateClass(iso) {
   &:hover { color: $color-text-primary; background: $color-bg-hover; }
   &.active { color: $color-primary; background: $color-primary-light; }
   &.delete:hover { color: $rose-500; background: rgba($rose-500, 0.1); }
+  &.delete.confirming {
+    color: white;
+    background: $rose-500;
+    opacity: 1;
+    animation: pulse-delete 0.6s ease infinite alternate;
+  }
+}
+
+.confirm-label {
+  font-size: 10px;
+  font-weight: $font-weight-bold;
+  position: absolute;
+  top: -2px;
+  right: -2px;
+}
+
+@keyframes pulse-delete {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
 }
 
 .action-menu-wrapper {
@@ -597,105 +586,6 @@ function dueDateClass(iso) {
     margin: $space-1 0;
     border: none;
     border-top: 1px solid $color-border;
-  }
-}
-
-// Subtasks section
-.subtasks-section {
-  padding: 0 $space-4 $space-3;
-  border-top: 1px solid $color-border;
-  margin: 0 $space-3;
-}
-
-.subtask-item {
-  display: flex;
-  align-items: center;
-  gap: $space-2;
-  padding: $space-2 0;
-
-  &.done .subtask-text { text-decoration: line-through; color: $color-text-muted; }
-}
-
-.subtask-check {
-  @include flex-center;
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: $color-text-muted;
-  flex-shrink: 0;
-
-  &:hover { color: $color-success; }
-}
-
-.subtask-item.done .subtask-check { color: $color-success; }
-
-.subtask-text {
-  flex: 1;
-  font-size: $font-size-sm;
-}
-
-.subtask-delete {
-  @include btn-icon(22px);
-  opacity: 0;
-  color: $color-text-muted;
-  &:hover { color: $rose-500; }
-  .subtask-item:hover & { opacity: 1; }
-}
-
-.subtask-add {
-  display: flex;
-  gap: $space-2;
-  margin-top: $space-2;
-}
-
-.subtask-input {
-  flex: 1;
-  padding: $space-1 $space-2;
-  border: 1px dashed $color-border;
-  border-radius: $radius-sm;
-  font-size: $font-size-sm;
-  background: transparent;
-  transition: all $transition-fast;
-
-  &:focus {
-    outline: none;
-    border-color: $color-primary;
-    border-style: solid;
-  }
-}
-
-.subtask-add-btn {
-  @include btn-icon(26px);
-  color: $color-primary;
-  background: $color-primary-light;
-  &:hover { background: $color-primary; color: white; }
-  &:disabled { opacity: 0.3; }
-}
-
-// Notes section
-.notes-section {
-  padding: 0 $space-4 $space-3;
-  border-top: 1px solid $color-border;
-  margin: 0 $space-3;
-}
-
-.notes-textarea {
-  width: 100%;
-  margin-top: $space-3;
-  padding: $space-3;
-  border: 1px solid $color-border;
-  border-radius: $radius-md;
-  font-family: $font-mono;
-  font-size: $font-size-sm;
-  line-height: $line-height-relaxed;
-  resize: vertical;
-  min-height: 80px;
-  transition: border-color $transition-fast;
-
-  &:focus {
-    outline: none;
-    border-color: $color-primary;
   }
 }
 </style>

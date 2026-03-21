@@ -17,6 +17,7 @@ export const useTaskStore = defineStore('tasks', {
     sortDirection: 'desc',
     selectedTaskIds: [],
     batchMode: false,
+    expandedTaskId: null,
   }),
 
   getters: {
@@ -86,7 +87,8 @@ export const useTaskStore = defineStore('tasks', {
           t.text.toLowerCase().includes(q) ||
           t.notes?.toLowerCase().includes(q) ||
           t.tags?.some(tag => tag.toLowerCase().includes(q)) ||
-          t.links?.some(link => link.toLowerCase().includes(q))
+          t.links?.some(link => link.toLowerCase().includes(q)) ||
+          t.blocks?.some(b => (b.text || b.name || '').toLowerCase().includes(q))
         )
       }
 
@@ -235,7 +237,7 @@ export const useTaskStore = defineStore('tasks', {
         categoryId: taskData.categoryId || this.activeCategory || 'inbox',
         dueDate: taskData.dueDate || null,
         recurrence: taskData.recurrence || null,
-        subtasks: taskData.subtasks || [],
+        blocks: taskData.blocks || [],
         status: 'todo',
         isUrgent: taskData.isUrgent || false,
         focusTime: 0,
@@ -288,30 +290,89 @@ export const useTaskStore = defineStore('tasks', {
       this.items = newOrder
     },
 
-    // Subtasks
-    addSubtask(taskId, text) {
+    // Blocks
+    addBlock(taskId, block) {
       const task = this.items.find(t => t.id === taskId)
       if (!task) return
-      if (!task.subtasks) task.subtasks = []
-      task.subtasks.push({
+      if (!task.blocks) task.blocks = []
+      task.blocks.push({
         id: uuidv4(),
-        text,
-        completed: false,
+        ...block,
         createdAt: new Date().toISOString(),
       })
+      task.updatedAt = new Date().toISOString()
     },
 
-    toggleSubtask(taskId, subtaskId) {
+    updateBlock(taskId, blockId, updates) {
       const task = this.items.find(t => t.id === taskId)
       if (!task) return
-      const sub = task.subtasks?.find(s => s.id === subtaskId)
-      if (sub) sub.completed = !sub.completed
+      const block = task.blocks?.find(b => b.id === blockId)
+      if (block) Object.assign(block, updates)
+      task.updatedAt = new Date().toISOString()
     },
 
-    deleteSubtask(taskId, subtaskId) {
+    deleteBlock(taskId, blockId) {
       const task = this.items.find(t => t.id === taskId)
       if (!task) return
-      task.subtasks = task.subtasks?.filter(s => s.id !== subtaskId)
+      task.blocks = task.blocks?.filter(b => b.id !== blockId)
+      task.updatedAt = new Date().toISOString()
+    },
+
+    reorderBlocks(taskId, newOrder) {
+      const task = this.items.find(t => t.id === taskId)
+      if (!task) return
+      task.blocks = newOrder
+      task.updatedAt = new Date().toISOString()
+    },
+
+    toggleBlockComplete(taskId, blockId) {
+      const task = this.items.find(t => t.id === taskId)
+      if (!task) return
+      const block = task.blocks?.find(b => b.id === blockId)
+      if (block && block.type === 'text') {
+        block.completed = !block.completed
+      }
+    },
+
+    // Legacy migration: convert old subtasks/attachments to blocks
+    migrateToBlocks() {
+      this.items.forEach(task => {
+        if (task.blocks) return // already migrated
+        const blocks = []
+        // Migrate subtasks
+        if (task.subtasks?.length) {
+          task.subtasks.forEach(s => {
+            blocks.push({
+              id: s.id || uuidv4(),
+              type: 'text',
+              text: s.text,
+              completed: s.completed || false,
+              createdAt: s.createdAt || new Date().toISOString(),
+            })
+          })
+        }
+        // Migrate attachments
+        if (task.attachments?.length) {
+          task.attachments.forEach(a => {
+            blocks.push({
+              id: a.id || uuidv4(),
+              type: a.type || 'file',
+              name: a.name,
+              url: a.url,
+              size: a.size,
+              sizeFormatted: a.sizeFormatted,
+              mimeType: a.mimeType,
+              icon: a.icon,
+              duration: a.duration,
+              createdAt: a.createdAt || new Date().toISOString(),
+            })
+          })
+        }
+        task.blocks = blocks
+        // Clean up old fields
+        delete task.subtasks
+        delete task.attachments
+      })
     },
 
     // Categories
@@ -377,7 +438,11 @@ export const useTaskStore = defineStore('tasks', {
         categoryId: task.categoryId,
         dueDate: nextDate.toISOString(),
         recurrence: task.recurrence,
-        subtasks: task.subtasks?.map(s => ({ ...s, id: uuidv4(), completed: false })),
+        blocks: task.blocks?.map(b => ({
+          ...b,
+          id: uuidv4(),
+          completed: b.type === 'text' ? false : undefined,
+        })) || [],
         isUrgent: task.isUrgent,
       })
     },

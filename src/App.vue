@@ -89,6 +89,7 @@ function handleKeydown(e) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  tasks.migrateToBlocks()
 })
 
 onUnmounted(() => {

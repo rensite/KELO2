@@ -23,7 +23,6 @@ const sortOptions = [
 
 <template>
   <div class="list-view">
-    <TaskInput />
 
     <!-- Toolbar -->
     <div class="list-toolbar">
@@ -65,6 +64,11 @@ const sortOptions = [
     <EmptyState v-else />
 
     <BatchActionBar v-if="tasks.batchMode && tasks.selectedTaskIds.length > 0" />
+
+    <!-- Floating add task -->
+    <div class="floating-input">
+      <TaskInput />
+    </div>
   </div>
 </template>
 
@@ -75,6 +79,25 @@ const sortOptions = [
 .list-view {
   max-width: 800px;
   margin: 0 auto;
+  padding-bottom: 90px;
+}
+
+.floating-input {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: $space-3 $space-4 $space-4;
+  background: linear-gradient(transparent, $color-bg 30%);
+  z-index: $z-sticky;
+  display: flex;
+  justify-content: center;
+
+  .task-input-container {
+    max-width: 800px;
+    width: 100%;
+    margin-bottom: 0;
+  }
 }
 
 .list-toolbar {
