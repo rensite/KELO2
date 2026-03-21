@@ -1,0 +1,132 @@
+// ─── Slide Animations ────────────────────────────────────
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+// ─── Fade ────────────────────────────────────────────────
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+// ─── Scale ───────────────────────────────────────────────
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scaleSpring {
+  0%   { transform: scale(0.9); }
+  50%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+// ─── Pulse / Glow ────────────────────────────────────────
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.2); }
+  50%      { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+}
+
+// ─── Shake ───────────────────────────────────────────────
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  75%      { transform: translateX(4px); }
+}
+
+// ─── Slide remove ────────────────────────────────────────
+@keyframes slideRemove {
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+    max-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+// ─── Strikethrough ───────────────────────────────────────
+@keyframes strikethrough {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+// ─── Spinner ─────────────────────────────────────────────
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// ─── Confetti burst ──────────────────────────────────────
+@keyframes confetti-pop {
+  0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+  50%  { transform: scale(1.2) rotate(180deg); opacity: 1; }
+  100% { transform: scale(0) rotate(360deg); opacity: 0; }
+}
+
+// ─── Gradient shift ──────────────────────────────────────
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+// ─── Progress fill ───────────────────────────────────────
+@keyframes progressFill {
+  from { width: 0%; }
+}
+
+// ─── Float ───────────────────────────────────────────────
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-8px); }
+}
+
+// ─── Ring pulse (pomodoro) ───────────────────────────────
+@keyframes ringPulse {
+  0%   { stroke-dashoffset: var(--ring-offset); }
+  100% { stroke-dashoffset: 0; }
+}
+
+// ─── Count up ────────────────────────────────────────────
+@keyframes countUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+// ─── Heatmap cell fade ───────────────────────────────────
+@keyframes heatmapFade {
+  from { opacity: 0; transform: scale(0); }
+  to   { opacity: 1; transform: scale(1); }
+}

@@ -1,0 +1,92 @@
+@use 'reset';
+@use 'variables' as *;
+@use 'animations';
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body {
+  font-family: $font-family;
+  font-size: 16px;
+  color: $color-text-primary;
+  background: $color-bg;
+  overflow-x: hidden;
+}
+
+// ─── Vue Transitions ─────────────────────────────────────
+.fade-enter-active, .fade-leave-active {
+  transition: opacity $transition-base;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active {
+  animation: slideInUp $transition-base;
+}
+.slide-up-leave-active {
+  animation: slideInUp $transition-base reverse;
+}
+
+.slide-down-enter-active {
+  animation: slideInDown $transition-base;
+}
+.slide-down-leave-active {
+  animation: slideInDown $transition-base reverse;
+}
+
+.scale-enter-active {
+  animation: scaleIn $transition-spring;
+}
+.scale-leave-active {
+  animation: scaleIn $transition-fast reverse;
+}
+
+.pop-enter-active {
+  animation: popIn $transition-spring;
+}
+.pop-leave-active {
+  animation: scaleIn $transition-fast reverse;
+}
+
+// ─── List transitions ────────────────────────────────────
+.list-enter-active {
+  animation: slideInUp $transition-base;
+}
+.list-leave-active {
+  animation: slideRemove $transition-base forwards;
+  position: absolute;
+  width: 100%;
+}
+.list-move {
+  transition: transform $transition-slow;
+}
+
+// ─── Command palette transition ──────────────────────────
+.palette-enter-active {
+  animation: scaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.palette-leave-active {
+  animation: scaleIn 150ms ease-in reverse;
+}
+
+// ─── Backdrop transition ─────────────────────────────────
+.backdrop-enter-active, .backdrop-leave-active {
+  transition: opacity $transition-base;
+}
+.backdrop-enter-from, .backdrop-leave-to {
+  opacity: 0;
+}
+
+// ─── Toast transition ────────────────────────────────────
+.toast-enter-active {
+  animation: slideInRight $transition-spring;
+}
+.toast-leave-active {
+  animation: slideInRight $transition-fast reverse;
+}
+
+// ─── Selection ───────────────────────────────────────────
+::selection {
+  background: rgba($violet-500, 0.15);
+  color: $violet-700;
+}
