@@ -252,6 +252,11 @@ function formatPreviewDate(iso) {
   max-height: 200px;
   overflow-y: auto;
 
+  @media (max-width: 768px) {
+    min-height: 56px;
+    padding-right: 52px;
+  }
+
   &::placeholder {
     color: $color-text-muted;
     font-size: $font-size-base;

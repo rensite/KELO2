@@ -8,7 +8,7 @@ import { hashColor, hashColorLight } from '../../stores/utils.js'
 import {
   Inbox, FolderPlus, Plus, X, Pin, Trash2,
   CheckCircle2, Circle, Clock, CalendarClock, AlertTriangle,
-  Filter, ChevronDown, ChevronRight, FileText, Activity
+  Filter, ChevronDown, ChevronRight, FileText, Activity, Sparkles
 } from 'lucide-vue-next'
 import Dashboard from '../productivity/Dashboard.vue'
 import ActivityTimeline from '../productivity/ActivityTimeline.vue'
@@ -23,6 +23,18 @@ const newCategoryName = ref('')
 const tagsExpanded = ref(true)
 const templatesExpanded = ref(true)
 const activeTagFilter = ref(null)
+const apiKeySet = ref(!!localStorage.getItem('kelo_gemini_key'))
+
+function saveApiKey(e) {
+  const val = e.target.value.trim()
+  if (val) {
+    localStorage.setItem('kelo_gemini_key', val)
+  } else {
+    localStorage.removeItem('kelo_gemini_key')
+  }
+  apiKeySet.value = !!val
+  e.target.value = ''
+}
 
 const quickFilters = [
   { id: 'all', label: 'All Tasks', icon: Circle, count: () => tasks.items.length },
@@ -217,6 +229,23 @@ function categoryTaskCount(catId) {
           </div>
         </div>
       </section>
+      <!-- AI Settings -->
+      <section class="sidebar-section">
+        <h3 class="section-title">
+          <Sparkles :size="14" />
+          AI Summary
+        </h3>
+        <div class="ai-key-row">
+          <input
+            type="password"
+            :placeholder="apiKeySet ? '••••••••••••' : 'Gemini API key...'"
+            class="ai-key-input"
+            @change="saveApiKey"
+          />
+          <span v-if="apiKeySet" class="ai-key-ok">✓</span>
+        </div>
+        <a href="https://aistudio.google.com/apikey" target="_blank" class="ai-key-link">Get free API key ↗</a>
+      </section>
     </div>
 
     <!-- Copyright -->
@@ -246,6 +275,8 @@ function categoryTaskCount(catId) {
   &.collapsed {
     transform: translateX(-100%);
     width: 0;
+    overflow: hidden;
+    border-right: none;
   }
 
   @include mobile {
@@ -451,6 +482,45 @@ function categoryTaskCount(catId) {
 .focus-stat-label {
   font-size: $font-size-xs;
   color: $color-text-muted;
+}
+
+// AI Settings
+.ai-key-row {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  padding: 0 $space-2;
+}
+
+.ai-key-input {
+  flex: 1;
+  padding: $space-2 $space-3;
+  font-size: $font-size-xs;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: $color-bg;
+  color: $color-text-primary;
+  font-family: $font-family;
+  outline: none;
+
+  &:focus { border-color: $color-primary; }
+  &::placeholder { color: $color-text-muted; }
+}
+
+.ai-key-ok {
+  color: $emerald-500;
+  font-weight: $font-weight-bold;
+  font-size: $font-size-sm;
+}
+
+.ai-key-link {
+  display: block;
+  padding: $space-1 $space-2;
+  margin-top: $space-1;
+  font-size: 10px;
+  color: $color-text-muted;
+  text-decoration: none;
+  &:hover { color: $color-primary; }
 }
 
 // Copyright

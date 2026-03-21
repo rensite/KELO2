@@ -90,6 +90,9 @@ function handleKeydown(e) {
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   tasks.migrateToBlocks()
+  if (window.innerWidth <= 768) {
+    settings.sidebarOpen = false
+  }
 })
 
 onUnmounted(() => {

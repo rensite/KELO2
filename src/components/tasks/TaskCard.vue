@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settings.js'
 import { useHistoryStore } from '../../stores/history.js'
 import { usePomodoroStore } from '../../stores/pomodoro.js'
 import { useToast } from '../../composables/useToast.js'
+import { useAI } from '../../composables/useAI.js'
 import { hashColor, hashColorLight } from '../../stores/utils.js'
 import { getUrlHostname, getFaviconUrl, parseTaskInput } from '../../composables/useTaskParser.js'
 import RichText from './RichText.vue'
@@ -14,7 +15,7 @@ import {
   ChevronDown, ChevronRight, Plus, RotateCw, Timer,
   StickyNote, Edit3, Focus, MoreHorizontal, X,
   AlertCircle, Circle, CheckCircle2, ExternalLink, Link2,
-  Paperclip, Layers
+  Paperclip, Layers, Sparkles
 } from 'lucide-vue-next'
 
 const props = defineProps({ task: Object })
@@ -24,11 +25,15 @@ const settings = useSettingsStore()
 const history = useHistoryStore()
 const pomodoro = usePomodoroStore()
 const { undoToast } = useToast()
+const { isAvailable: aiAvailable, generateSummary: aiSummarize } = useAI()
+
+const generatingSummary = ref(false)
 
 const isEditing = ref(false)
 const editText = ref('')
 const showMenu = ref(false)
 const confirmingDelete = ref(false)
+const showPriorityMenu = ref(false)
 let confirmTimer = null
 const editInput = ref(null)
 
@@ -96,6 +101,18 @@ function deleteTask() {
 }
 
 
+async function handleGenerateSummary() {
+  if (generatingSummary.value) return
+  generatingSummary.value = true
+  try {
+    const summary = await aiSummarize(props.task)
+    const t = tasks.items.find(t => t.id === props.task.id)
+    if (t) t.summary = summary
+  } catch (err) {
+    console.error('AI summary failed:', err)
+  }
+  generatingSummary.value = false
+}
 
 function startFocus() {
   pomodoro.activeTaskId = props.task.id
@@ -105,6 +122,7 @@ function startFocus() {
 function setPriority(p) {
   tasks.updateTask(props.task.id, { priority: p })
   showMenu.value = false
+  showPriorityMenu.value = false
 }
 
 function setStatus(status) {
@@ -166,7 +184,7 @@ function dueDateClass(iso) {
       completed: task.completed,
       'has-notes': task.notes,
       'batch-selected': tasks.selectedTaskIds.includes(task.id),
-      'menu-open': showMenu,
+      'menu-open': showMenu || showPriorityMenu,
       expanded: showBlocks,
       [`priority-${task.priority}`]: task.priority !== 'none',
     }"
@@ -204,9 +222,10 @@ function dueDateClass(iso) {
         </div>
         <div v-else class="task-text-row">
           <RichText :text="task.text" :tags="task.tags" :links="task.links" :completed="task.completed" />
+          <span v-if="task.summary" class="task-summary-inline">/ {{ task.summary }}</span>
         </div>
 
-        <!-- Metadata row -->
+        <!-- Metadata row: date, tasks, files, links -->
         <div class="task-meta" v-if="task.tags?.length || task.dueDate || task.recurrence || textBlockProgress || task.links?.length || mediaBlockCount">
           <span v-if="task.priority !== 'none'" class="meta-badge priority" :class="task.priority">
             <AlertCircle :size="11" />
@@ -220,19 +239,6 @@ function dueDateClass(iso) {
           >
             #{{ tag }}
           </span>
-          <a
-            v-for="link in task.links"
-            :key="link"
-            :href="link"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="meta-badge link-badge"
-            @click.stop
-          >
-            <img :src="getFaviconUrl(link)" width="12" height="12" class="link-favicon" alt="" />
-            <span class="link-hostname">{{ getUrlHostname(link) }}</span>
-            <ExternalLink :size="10" class="link-external-icon" />
-          </a>
           <span v-if="task.dueDate" class="meta-badge date" :class="dueDateClass(task.dueDate)">
             <CalendarDays :size="11" />
             {{ formatDueDate(task.dueDate) }}
@@ -251,11 +257,33 @@ function dueDateClass(iso) {
             <Paperclip :size="11" />
             {{ mediaBlockCount }}
           </span>
+          <a
+            v-for="link in task.links"
+            :key="link"
+            :href="link"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="meta-badge link-badge"
+            @click.stop
+          >
+            <img :src="getFaviconUrl(link)" width="12" height="12" class="link-favicon" alt="" />
+            <span class="link-hostname">{{ getUrlHostname(link) }}</span>
+            <ExternalLink :size="10" class="link-external-icon" />
+          </a>
         </div>
       </div>
 
       <!-- Actions -->
       <div class="task-actions">
+        <button
+          v-if="aiAvailable"
+          class="action-btn"
+          :class="{ generating: generatingSummary }"
+          @click.stop="handleGenerateSummary"
+          :title="task.summary ? 'Regenerate summary' : 'Generate AI summary'"
+        >
+          <Sparkles :size="15" />
+        </button>
         <button class="action-btn" @click="startFocus" title="Focus mode">
           <Focus :size="15" />
         </button>
@@ -267,6 +295,31 @@ function dueDateClass(iso) {
         >
           <Trash2 :size="15" />
         </button>
+        <div class="priority-selector">
+          <button
+            class="action-btn priority-btn"
+            :class="task.priority"
+            @click.stop="showPriorityMenu = !showPriorityMenu"
+            title="Set priority"
+          >
+            <AlertCircle :size="15" />
+          </button>
+          <Transition name="scale">
+            <div v-if="showPriorityMenu" class="priority-menu" @mouseleave="showPriorityMenu = false">
+              <button
+                v-for="p in ['high', 'medium', 'low', 'none']"
+                :key="p"
+                class="priority-option"
+                :class="[p, { active: task.priority === p }]"
+                @click.stop="setPriority(p)"
+              >
+                <AlertCircle v-if="p !== 'none'" :size="12" />
+                <Circle v-else :size="12" />
+                {{ p === 'none' ? 'None' : p.charAt(0).toUpperCase() + p.slice(1) }}
+              </button>
+            </div>
+          </Transition>
+        </div>
       </div>
     </div>
 
@@ -389,6 +442,71 @@ function dueDateClass(iso) {
     text-decoration: line-through;
     color: $color-text-muted;
   }
+}
+
+.task-summary-inline {
+  color: $color-text-muted;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-normal;
+  margin-left: $space-1;
+  white-space: nowrap;
+}
+
+.action-btn.generating {
+  color: $violet-500;
+  animation: spin-sparkle 1s linear infinite;
+}
+
+@keyframes spin-sparkle {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.priority-selector {
+  position: relative;
+}
+
+.priority-btn {
+  &.high { color: $priority-high; }
+  &.medium { color: $priority-medium; }
+  &.low { color: $priority-low; }
+  &.none { color: $color-text-muted; }
+}
+
+.priority-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: $space-1;
+  background: $color-bg-elevated;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  padding: $space-1;
+  min-width: 120px;
+  z-index: $z-dropdown;
+}
+
+.priority-option {
+  display: flex;
+  align-items: center;
+  gap: $space-2;
+  width: 100%;
+  padding: $space-2 $space-3;
+  border: none;
+  background: none;
+  border-radius: $radius-sm;
+  font-size: $font-size-xs;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &.high { color: $priority-high; }
+  &.medium { color: $priority-medium; }
+  &.low { color: $priority-low; }
+  &.none { color: $color-text-muted; }
+
+  &:hover { background: $color-bg-hover; }
+  &.active { font-weight: $font-weight-semibold; background: $color-bg-hover; }
 }
 
 .task-edit-input {
