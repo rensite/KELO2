@@ -29,13 +29,13 @@ export function useAI() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         system_instruction: {
-          parts: [{ text: 'You are a task summarizer. Given a task and its subtasks, write a brief 1-sentence summary (max 15 words) describing what needs to be done. Be concise and actionable. No quotes. No markdown.' }]
+          parts: [{ text: 'Summarize what this is about in one short sentence (max 10 words). Respond in the same language as the input. No quotes. No markdown. No prefix.' }]
         },
         contents: [{
-          parts: [{ text: `Summarize this task:\n${parts.join('\n')}` }]
+          parts: [{ text: parts.join('\n') }]
         }],
         generationConfig: {
-          maxOutputTokens: 60,
+          maxOutputTokens: 400,
           temperature: 0.3,
         }
       })

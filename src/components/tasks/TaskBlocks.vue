@@ -510,6 +510,7 @@ function fileExt(name) {
   cursor: default;
   min-width: 0;
   word-break: break-word;
+  white-space: pre-line;
   display: -webkit-box;
   -webkit-line-clamp: 10;
   line-clamp: 10;
