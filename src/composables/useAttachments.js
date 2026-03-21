@@ -174,5 +174,7 @@ export function useAttachments() {
     formatFileSize,
     getFileIcon,
     getAttachmentType,
+    readFileAsDataURL: fileToBase64,
+    pickFile: processFile,
   }
 }
