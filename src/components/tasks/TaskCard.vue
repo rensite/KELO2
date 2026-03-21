@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, reactive } from 'vue'
 import { useTaskStore } from '../../stores/tasks.js'
 import { useSettingsStore } from '../../stores/settings.js'
 import { useHistoryStore } from '../../stores/history.js'
@@ -28,6 +28,39 @@ const { undoToast } = useToast()
 const { isAvailable: aiAvailable, generateSummary: aiSummarize } = useAI()
 
 const generatingSummary = ref(false)
+const linkTitles = reactive({})
+
+// Fetch YouTube video titles via oEmbed
+function isYouTubeUrl(url) {
+  return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/i.test(url)
+}
+
+async function fetchLinkTitles() {
+  for (const link of (props.task.links || [])) {
+    // Use cached title from task object
+    if (props.task.linkTitles?.[link]) {
+      linkTitles[link] = props.task.linkTitles[link]
+      continue
+    }
+    if (isYouTubeUrl(link)) {
+      try {
+        const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(link)}&format=json`)
+        if (res.ok) {
+          const data = await res.json()
+          linkTitles[link] = data.title
+          // Cache on task object for persistence
+          const task = tasks.items.find(t => t.id === props.task.id)
+          if (task) {
+            if (!task.linkTitles) task.linkTitles = {}
+            task.linkTitles[link] = data.title
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+}
+
+onMounted(fetchLinkTitles)
 
 const isEditing = ref(false)
 const editText = ref('')
@@ -267,7 +300,7 @@ function dueDateClass(iso) {
             @click.stop
           >
             <img :src="getFaviconUrl(link)" width="12" height="12" class="link-favicon" alt="" />
-            <span class="link-hostname">{{ getUrlHostname(link) }}</span>
+            <span class="link-hostname">{{ linkTitles[link] || getUrlHostname(link) }}</span>
             <ExternalLink :size="10" class="link-external-icon" />
           </a>
         </div>

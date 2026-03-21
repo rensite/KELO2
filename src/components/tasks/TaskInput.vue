@@ -4,6 +4,7 @@ import { parseTaskInput, getUrlHostname } from '../../composables/useTaskParser.
 import { useTaskStore } from '../../stores/tasks.js'
 import { useHistoryStore } from '../../stores/history.js'
 import { useAttachments } from '../../composables/useAttachments.js'
+import { saveMedia } from '../../stores/mediaDB.js'
 import { hashColor } from '../../stores/utils.js'
 import {
   Plus, CalendarDays, Tag, AlertCircle, RotateCw, Link2,
@@ -103,10 +104,12 @@ async function handleFileSelected(e) {
     : file.type.startsWith('video') ? 'video'
     : file.type.startsWith('audio') ? 'audio'
     : 'file'
+  const mediaId = crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)
+  await saveMedia(mediaId, url)
   tasks.addBlock(targetTaskId, {
     type,
     name: file.name,
-    url,
+    mediaId,
     size: file.size,
     sizeFormatted: (file.size / 1024).toFixed(1) + ' KB',
     completed: false,

@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch, reactive, onMounted } from 'vue'
 import { useTaskStore } from '../../stores/tasks.js'
 import { useAttachments } from '../../composables/useAttachments.js'
+import { loadMedia, deleteMedia } from '../../stores/mediaDB.js'
 import { useToast } from '../../composables/useToast.js'
 import RichText from './RichText.vue'
 import {
@@ -38,6 +39,25 @@ const editBlockInput = ref(null)
 const draggedBlock = ref(null)
 const playingAudioId = ref(null)
 const audioElement = ref(null)
+
+// Media URL cache from IndexedDB
+const mediaUrls = reactive({})
+
+function mediaUrl(block) {
+  return mediaUrls[block.mediaId || block.id] || block.url || ''
+}
+
+async function loadBlockMedia() {
+  for (const block of props.blocks) {
+    if (block.mediaId && !mediaUrls[block.mediaId]) {
+      const url = await loadMedia(block.mediaId)
+      if (url) mediaUrls[block.mediaId] = url
+    }
+  }
+}
+
+watch(() => props.blocks.length, loadBlockMedia)
+onMounted(loadBlockMedia)
 const previewBlock = ref(null)
 const expandedBlocks = ref(new Set())
 const datePickerBlockId = ref(null)
@@ -96,6 +116,7 @@ function deleteBlockWithUndo(block) {
   const idx = task.blocks.findIndex(b => b.id === block.id)
   const blockCopy = { ...block }
   tasks.deleteBlock(props.taskId, block.id)
+  if (block.mediaId) deleteMedia(block.mediaId)
   const label = block.type === 'text' ? block.text : block.name
   undoToast(`Deleted "${label || 'block'}"`, () => {
     task.blocks.splice(idx, 0, blockCopy)
@@ -203,7 +224,7 @@ function toggleAudio(block) {
     playingAudioId.value = null
   } else {
     if (audioElement.value) audioElement.value.pause()
-    audioElement.value = new Audio(block.url)
+    audioElement.value = new Audio(mediaUrl(block))
     audioElement.value.play()
     playingAudioId.value = block.id
     audioElement.value.onended = () => { playingAudioId.value = null }
@@ -212,7 +233,7 @@ function toggleAudio(block) {
 
 function downloadBlock(block) {
   const link = document.createElement('a')
-  link.href = block.url
+  link.href = mediaUrl(block)
   link.download = block.name
   link.click()
 }
@@ -353,7 +374,7 @@ function fileExt(name) {
         <!-- IMAGE block -->
         <template v-else-if="block.type === 'image'">
           <div class="block-media-thumb" @click="handleBlockClick(block)">
-            <img :src="block.url" :alt="block.name" loading="lazy" />
+            <img :src="mediaUrl(block)" :alt="block.name" loading="lazy" />
             <div class="block-media-hover"><Eye :size="13" /></div>
           </div>
           <span class="block-media-name" :class="{ done: block.completed }">{{ block.name }}</span>
@@ -401,8 +422,8 @@ function fileExt(name) {
           <div class="blocks-preview-modal">
             <button class="blocks-preview-close" @click="closePreview"><X :size="20" /></button>
             <div class="blocks-preview-content">
-              <img v-if="previewBlock.type === 'image'" :src="previewBlock.url" :alt="previewBlock.name" class="blocks-preview-img" />
-              <video v-else-if="previewBlock.type === 'video'" :src="previewBlock.url" controls autoplay class="blocks-preview-vid" />
+              <img v-if="previewBlock.type === 'image'" :src="mediaUrl(previewBlock)" :alt="previewBlock.name" class="blocks-preview-img" />
+              <video v-else-if="previewBlock.type === 'video'" :src="mediaUrl(previewBlock)" controls autoplay class="blocks-preview-vid" />
             </div>
             <div class="blocks-preview-footer">
               <span>{{ previewBlock.name }}</span>

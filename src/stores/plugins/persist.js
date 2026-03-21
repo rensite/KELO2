@@ -32,6 +32,16 @@ export function createPersistPlugin() {
           const state = JSON.parse(JSON.stringify(store.$state))
           // Remove non-serializable fields
           delete state._saveTimeout
+          // Strip media data URLs from blocks (stored in IndexedDB)
+          if (store.$id === 'tasks' && state.items) {
+            for (const task of state.items) {
+              if (task.blocks) {
+                for (const block of task.blocks) {
+                  if (block.mediaId) delete block.url
+                }
+              }
+            }
+          }
           localStorage.setItem(key, JSON.stringify(state))
         } catch (e) {
           console.warn(`Failed to save ${key} to localStorage:`, e)
