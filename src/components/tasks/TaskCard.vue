@@ -62,6 +62,63 @@ async function fetchLinkTitles() {
 
 onMounted(fetchLinkTitles)
 
+function getTelegramUsername(url) {
+  const m = url.match(/(?:t\.me|telegram\.me|telegram\.org)\/([\w]+)/i)
+  return m && m[1] !== 's' ? `@${m[1]}` : null
+}
+
+function truncateStr(str, max = 30) {
+  return str.length > max ? str.slice(0, max) + '…' : str
+}
+
+function getSmartLabel(url) {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    const path = u.pathname.replace(/^\//, '').replace(/\/$/, '')
+    if (host === 'gemini.google.com') return 'Gemini Chat'
+    if (host === 'aistudio.google.com') return 'AI Studio'
+    if (host === 'github.com' && path) {
+      const parts = path.split('/')
+      return parts.length >= 2 ? truncateStr(`${parts[0]}/${parts[1]}`) : parts[0]
+    }
+    if (host === 'docs.google.com') {
+      if (path.startsWith('document')) return 'Google Doc'
+      if (path.startsWith('spreadsheets')) return 'Google Sheet'
+      if (path.startsWith('presentation')) return 'Google Slides'
+      return 'Google Docs'
+    }
+    if (host === 'drive.google.com') return 'Google Drive'
+    if (host === 'vk.com') {
+      if (path.startsWith('video')) return 'VK Video'
+      if (path.startsWith('@')) return path
+      return path ? truncateStr(path) : 'VK'
+    }
+    if (host.includes('reddit.com') && path.includes('/r/')) {
+      const sub = path.match(/r\/([\w]+)/)?.[1]
+      return sub ? `r/${sub}` : 'Reddit'
+    }
+    if (host.includes('wikipedia.org')) {
+      const title = path.replace('wiki/', '').replace(/_/g, ' ')
+      return title ? truncateStr(decodeURIComponent(title)) : 'Wikipedia'
+    }
+    if (host.includes('figma.com')) return 'Figma'
+    if (host.includes('kinopoisk.ru')) return 'Kinopoisk'
+    if (host.includes('imdb.com')) return 'IMDB'
+    return null
+  } catch { return null }
+}
+
+function metaLinkLabel(link) {
+  const tg = getTelegramUsername(link)
+  if (tg) return tg
+  const title = linkTitles[link]
+  if (title) return truncateStr(title)
+  const smart = getSmartLabel(link)
+  if (smart) return smart
+  return getUrlHostname(link)
+}
+
 const isEditing = ref(false)
 const editText = ref('')
 const showMenu = ref(false)
@@ -300,7 +357,7 @@ function dueDateClass(iso) {
             @click.stop
           >
             <img :src="getFaviconUrl(link)" width="12" height="12" class="link-favicon" alt="" />
-            <span class="link-hostname">{{ (linkTitles[link] || getUrlHostname(link)).slice(0, 30) }}{{ (linkTitles[link] || '').length > 30 ? '…' : '' }}</span>
+            <span class="link-hostname">{{ metaLinkLabel(link) }}</span>
             <ExternalLink :size="10" class="link-external-icon" />
           </a>
         </div>

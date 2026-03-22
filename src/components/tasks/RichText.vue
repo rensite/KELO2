@@ -59,6 +59,7 @@ const segments = computed(() => {
         value: url,
         hostname: getUrlHostname(url),
         favicon: getFaviconUrl(url),
+        telegramUser: getTelegramUsername(url),
       })
     }
     
@@ -96,8 +97,75 @@ function truncate(str, max = 30) {
   return str.length > max ? str.slice(0, max) + '…' : str
 }
 
+function getTelegramUsername(url) {
+  const m = url.match(/(?:t\.me|telegram\.me|telegram\.org)\/([\w]+)/i)
+  return m && m[1] !== 's' ? `@${m[1]}` : null
+}
+
+function getSmartLabel(url) {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '')
+    const path = u.pathname.replace(/^\//, '').replace(/\/$/, '')
+
+    // Gemini
+    if (host === 'gemini.google.com') return 'Gemini Chat'
+    if (host === 'aistudio.google.com') return 'AI Studio'
+
+    // GitHub
+    if (host === 'github.com' && path) {
+      const parts = path.split('/')
+      if (parts.length >= 2) return truncate(`${parts[0]}/${parts[1]}`)
+      return parts[0]
+    }
+
+    // Google Docs/Sheets/Slides
+    if (host === 'docs.google.com') {
+      if (path.startsWith('document')) return 'Google Doc'
+      if (path.startsWith('spreadsheets')) return 'Google Sheet'
+      if (path.startsWith('presentation')) return 'Google Slides'
+      return 'Google Docs'
+    }
+
+    // Google Drive
+    if (host === 'drive.google.com') return 'Google Drive'
+
+    // VK
+    if (host === 'vk.com') {
+      if (path.startsWith('video')) return 'VK Video'
+      if (path.startsWith('@')) return path
+      return path ? truncate(path) : 'VK'
+    }
+
+    // Reddit
+    if (host.includes('reddit.com') && path.includes('/r/')) {
+      const sub = path.match(/r\/([\w]+)/)?.[1]
+      return sub ? `r/${sub}` : 'Reddit'
+    }
+
+    // Wikipedia
+    if (host.includes('wikipedia.org')) {
+      const title = path.replace('wiki/', '').replace(/_/g, ' ')
+      return title ? truncate(decodeURIComponent(title)) : 'Wikipedia'
+    }
+
+    // Figma
+    if (host.includes('figma.com')) return 'Figma'
+
+    // Kinopoisk / IMDB
+    if (host.includes('kinopoisk.ru')) return 'Kinopoisk'
+    if (host.includes('imdb.com')) return 'IMDB'
+
+    return null
+  } catch { return null }
+}
+
 function linkLabel(seg) {
-  return ytTitles[seg.value] ? truncate(ytTitles[seg.value]) : seg.hostname
+  if (seg.telegramUser) return seg.telegramUser
+  if (ytTitles[seg.value]) return truncate(ytTitles[seg.value])
+  const smart = getSmartLabel(seg.value)
+  if (smart) return smart
+  return seg.hostname
 }
 
 function downloadMp3(url) {
