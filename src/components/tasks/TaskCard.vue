@@ -255,8 +255,8 @@ function dueDateClass(iso) {
         </div>
         <div v-else class="task-text-row">
           <RichText :text="task.text" :tags="task.tags" :links="task.links" :completed="task.completed" />
-          <span v-if="task.summary" class="task-summary-inline">/ {{ task.summary }}</span>
         </div>
+        <div v-if="task.summary && !isEditing" class="task-summary-line">{{ task.summary }}</div>
 
         <!-- Metadata row: date, tasks, files, links -->
         <div class="task-meta" v-if="task.tags?.length || task.dueDate || task.recurrence || textBlockProgress || task.links?.length || mediaBlockCount">
@@ -477,11 +477,13 @@ function dueDateClass(iso) {
   }
 }
 
-.task-summary-inline {
+.task-summary-line {
   color: $color-text-muted;
-  font-size: $font-size-sm;
-  font-weight: $font-weight-normal;
-  margin-left: $space-1;
+  font-size: $font-size-xs;
+  line-height: $line-height-tight;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

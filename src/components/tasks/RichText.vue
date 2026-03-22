@@ -2,7 +2,7 @@
 import { computed, reactive, onMounted } from 'vue'
 import { hashColor, hashColorLight } from '../../stores/utils.js'
 import { getUrlHostname, getFaviconUrl } from '../../composables/useTaskParser.js'
-import { ExternalLink } from 'lucide-vue-next'
+import { ExternalLink, Music } from 'lucide-vue-next'
 
 const props = defineProps({
   text: { type: String, default: '' },
@@ -100,6 +100,10 @@ function linkLabel(seg) {
   return ytTitles[seg.value] ? truncate(ytTitles[seg.value]) : seg.hostname
 }
 
+function downloadMp3(url) {
+  window.open(`https://cobalt.tools/?u=${encodeURIComponent(url)}`, '_blank')
+}
+
 onMounted(async () => {
   // Load cached titles
   try {
@@ -155,6 +159,14 @@ onMounted(async () => {
         <span class="rt-link-host">{{ linkLabel(seg) }}</span>
         <ExternalLink :size="9" class="rt-link-external" />
       </a>
+      <button
+        v-if="seg.type === 'link' && isYouTubeUrl(seg.value)"
+        class="rt-mp3-btn"
+        @click.stop="downloadMp3(seg.value)"
+        title="Download MP3 via cobalt.tools"
+      >
+        <Music :size="10" />
+      </button>
     </template>
   </span>
 </template>
@@ -239,5 +251,26 @@ onMounted(async () => {
 .rt-link-external {
   opacity: 0.5;
   flex-shrink: 0;
+}
+
+.rt-mp3-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: rgba(#e74c3c, 0.1);
+  color: #e74c3c;
+  border-radius: $radius-full;
+  cursor: pointer;
+  margin-left: 2px;
+  vertical-align: middle;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: rgba(#e74c3c, 0.25);
+    transform: scale(1.15);
+  }
 }
 </style>
