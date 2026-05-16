@@ -35,9 +35,9 @@ const segments = computed(() => {
   tokenRegex.lastIndex = 0
   
   while ((match = tokenRegex.exec(fullText)) !== null) {
-    // Add preceding text
+    // Add preceding text (preserve whitespace/newlines)
     if (match.index > lastIndex) {
-      const preceding = fullText.slice(lastIndex, match.index).trim()
+      const preceding = fullText.slice(lastIndex, match.index)
       if (preceding) result.push({ type: 'text', value: preceding })
     }
     
@@ -66,9 +66,9 @@ const segments = computed(() => {
     lastIndex = match.index + match[0].length
   }
   
-  // Remaining text
+  // Remaining text (preserve whitespace/newlines)
   if (lastIndex < fullText.length) {
-    const tail = fullText.slice(lastIndex).trim()
+    const tail = fullText.slice(lastIndex)
     if (tail) result.push({ type: 'text', value: tail })
   }
   
@@ -247,6 +247,8 @@ onMounted(async () => {
   font-size: $font-size-base;
   line-height: $line-height-normal;
   color: $color-text-primary;
+  white-space: pre-wrap;
+  word-break: break-word;
   
   &.completed {
     text-decoration: line-through;

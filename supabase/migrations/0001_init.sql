@@ -179,6 +179,23 @@ begin
 end $$;
 
 grant execute on function public.duplicate_task(uuid) to authenticated;
+revoke execute on function public.duplicate_task(uuid) from anon, public;
+
+-- =========================================================
+-- Defense in depth: revoke direct grants from `anon`.
+-- RLS is the primary guard, but if someone accidentally disables it,
+-- the `anon` role still has no table privileges to fall back on.
+-- `authenticated` retains full table access, scoped by the RLS policies above.
+-- =========================================================
+do $$
+declare t text;
+begin
+  foreach t in array array['categories','tasks','blocks','templates','history','pomodoro_sessions','settings']
+  loop
+    execute format('revoke all on public.%I from anon', t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
+  end loop;
+end $$;
 
 -- =========================================================
 -- Storage bucket: media (private)

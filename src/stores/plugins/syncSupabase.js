@@ -18,6 +18,8 @@ import { useAuthStore } from '../auth.js'
 import { useTaskStore } from '../tasks.js'
 import { useTemplateStore } from '../templates.js'
 import { useSettingsStore } from '../settings.js'
+import { uploadBlob } from '../../lib/storage.js'
+import { loadMedia, deleteMedia as deleteIDBMedia } from '../mediaDB.js'
 
 let started = false
 let unsubFns = []
@@ -417,6 +419,59 @@ export async function smartMerge(localBackup) {
   return stats
 }
 
+// ----- one-shot media migration: IndexedDB / dataURL → Storage -----
+/**
+ * Walks all blocks. For any block with a media payload (legacy `mediaId`
+ * pointing to IndexedDB, or inline `url` data URL) but no `mediaPath`, upload
+ * it to Supabase Storage and replace.
+ */
+export async function migrateMediaToStorage(onProgress) {
+  const auth = useAuthStore()
+  if (!auth.user) return { migrated: 0, failed: 0 }
+  const userId = auth.user.id
+  const tasks = useTaskStore()
+
+  let migrated = 0
+  let failed = 0
+  const candidates = []
+  for (const task of tasks.items) {
+    for (const block of task.blocks || []) {
+      if (block.mediaPath) continue
+      if (block.mediaId || (typeof block.url === 'string' && block.url.startsWith('data:'))) {
+        candidates.push({ task, block })
+      }
+    }
+  }
+
+  for (let i = 0; i < candidates.length; i++) {
+    const { task, block } = candidates[i]
+    try {
+      let dataUrl = block.url
+      if (block.mediaId && !dataUrl?.startsWith?.('data:')) {
+        dataUrl = await loadMedia(block.mediaId)
+      }
+      if (!dataUrl) { failed++; continue }
+      const res = await fetch(dataUrl)
+      const blob = await res.blob()
+      const ext = (block.name?.split('.').pop() || blob.type.split('/')[1] || 'bin').toLowerCase()
+      const path = await uploadBlob(blob, userId, block.id, ext, blob.type || 'application/octet-stream')
+      if (!path) { failed++; continue }
+      // mutate block (will sync to cloud via subscribe)
+      block.mediaPath = path
+      delete block.url
+      if (block.mediaId) { deleteIDBMedia(block.mediaId); delete block.mediaId }
+      task.updatedAt = new Date().toISOString()
+      migrated++
+      onProgress?.(i + 1, candidates.length)
+    } catch (e) {
+      console.warn('[sync] media migrate failed for block', block.id, e)
+      failed++
+    }
+  }
+  if (migrated) schedulePush()
+  return { migrated, failed, total: candidates.length }
+}
+
 // ----- empty-cloud check (for migration dialog) -----
 export async function isCloudEmpty() {
   const auth = useAuthStore()
@@ -472,6 +527,10 @@ export async function startAfterSignIn() {
   if (!hasSupabase) return
   await pullAll()
   subscribeRealtime()
+  // Run media migration in background — non-blocking.
+  migrateMediaToStorage().then((r) => {
+    if (r.migrated > 0) console.info(`[sync] migrated ${r.migrated}/${r.total} media to Storage`)
+  })
 }
 
 export function stopCloudSync() {

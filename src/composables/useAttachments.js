@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/auth.js'
-import { uploadMedia, uploadBlob, getMediaUrl } from '../lib/storage.js'
+import { uploadMedia, uploadBlob } from '../lib/storage.js'
 
 /**
  * Attachment types: image, video, audio, file
@@ -55,15 +55,14 @@ export function useAttachments() {
     const id = crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)
     const auth = useAuthStore()
 
-    // Try cloud storage when signed in
+    // Try cloud storage when signed in. If success, don't keep dataURL
+    // (saves localStorage and avoids stale expired signed URLs in storage).
     let mediaPath = null
     let url = null
     if (auth.user) {
       mediaPath = await uploadMedia(file, auth.user.id, id)
-      if (mediaPath) url = await getMediaUrl(mediaPath)
     }
-    // Fallback: data URL (works offline / signed-out)
-    if (!url) url = await fileToBase64(file)
+    if (!mediaPath) url = await fileToBase64(file)
 
     return {
       id,
@@ -134,9 +133,8 @@ export function useAttachments() {
         let url = null
         if (auth.user) {
           mediaPath = await uploadBlob(blob, auth.user.id, id, 'webm', 'audio/webm')
-          if (mediaPath) url = await getMediaUrl(mediaPath)
         }
-        if (!url) {
+        if (!mediaPath) {
           url = await new Promise((res) => {
             const r = new FileReader()
             r.onload = () => res(r.result)

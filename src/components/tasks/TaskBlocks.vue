@@ -3,6 +3,7 @@ import { ref, computed, nextTick, watch, reactive, onMounted } from 'vue'
 import { useTaskStore } from '../../stores/tasks.js'
 import { useAttachments } from '../../composables/useAttachments.js'
 import { loadMedia, deleteMedia } from '../../stores/mediaDB.js'
+import { getMediaUrl, deleteMedia as deleteStorageMedia } from '../../lib/storage.js'
 import { useToast } from '../../composables/useToast.js'
 import { useClipboard } from '../../composables/useClipboard.js'
 import RichText from './RichText.vue'
@@ -46,11 +47,19 @@ const audioElement = ref(null)
 const mediaUrls = reactive({})
 
 function mediaUrl(block) {
-  return mediaUrls[block.mediaId || block.id] || block.url || ''
+  // priority: in-memory cache → cloud signed URL → inline data URL → empty
+  return mediaUrls[block.mediaPath || block.mediaId || block.id] || block.url || ''
 }
 
 async function loadBlockMedia() {
   for (const block of props.blocks) {
+    // Cloud storage path: fetch signed URL (cached)
+    if (block.mediaPath && !mediaUrls[block.mediaPath]) {
+      const url = await getMediaUrl(block.mediaPath)
+      if (url) mediaUrls[block.mediaPath] = url
+      continue
+    }
+    // Legacy IndexedDB media
     if (block.mediaId && !mediaUrls[block.mediaId]) {
       const url = await loadMedia(block.mediaId)
       if (url) mediaUrls[block.mediaId] = url
@@ -119,6 +128,7 @@ function deleteBlockWithUndo(block) {
   const blockCopy = { ...block }
   tasks.deleteBlock(props.taskId, block.id)
   if (block.mediaId) deleteMedia(block.mediaId)
+  if (block.mediaPath) deleteStorageMedia(block.mediaPath)
   const label = block.type === 'text' ? block.text : block.name
   undoToast(`Deleted "${label || 'block'}"`, () => {
     task.blocks.splice(idx, 0, blockCopy)
@@ -158,7 +168,8 @@ function startEditBlock(block) {
   nextTick(() => {
     const el = editBlockInput.value
     if (el) {
-      el.rows = block.text.length > 80 ? 3 : 1
+      const lines = (block.text.match(/\n/g) || []).length + 1
+      el.rows = Math.max(lines, block.text.length > 80 ? 3 : 1)
       el.focus()
       autoResizeTextarea(el)
     }

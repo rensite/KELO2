@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { CloudUpload, CloudDownload, GitMerge, Loader2 } from 'lucide-vue-next'
 import { useTaskStore } from '../../stores/tasks.js'
 import { useTemplateStore } from '../../stores/templates.js'
-import { pullAll, pushAllLocal, smartMerge } from '../../stores/plugins/syncSupabase.js'
+import { pullAll, pushAllLocal, smartMerge, migrateMediaToStorage } from '../../stores/plugins/syncSupabase.js'
 import { useToast } from '../../composables/useToast.js'
 
 const props = defineProps({ cloudEmpty: Boolean })
@@ -19,8 +19,10 @@ const localCount = tasks.items.length
 async function chooseUpload() {
   busy.value = true
   try {
+    const m = await migrateMediaToStorage()
     await pushAllLocal()
-    toast.success('Локальные данные загружены в облако')
+    const extra = m.migrated ? ` (медиа: ${m.migrated}/${m.total})` : ''
+    toast.success('Локальные данные загружены в облако' + extra)
     emit('done')
   } catch (e) {
     toast.error('Не удалось загрузить: ' + e.message)
@@ -41,6 +43,7 @@ async function chooseReplace() {
 async function chooseMerge() {
   busy.value = true
   try {
+    await migrateMediaToStorage()
     const localBackup = {
       tasks: JSON.parse(JSON.stringify(tasks.items)),
       categories: JSON.parse(JSON.stringify(tasks.categories)),
