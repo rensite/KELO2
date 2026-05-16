@@ -4,11 +4,12 @@ import { useTaskStore } from '../../stores/tasks.js'
 import { useAttachments } from '../../composables/useAttachments.js'
 import { loadMedia, deleteMedia } from '../../stores/mediaDB.js'
 import { useToast } from '../../composables/useToast.js'
+import { useClipboard } from '../../composables/useClipboard.js'
 import RichText from './RichText.vue'
 import {
   Circle, CheckCircle2, GripHorizontal, X,
   Image, Film, Music, FileText, Mic, Plus,
-  Play, Pause, Download, Eye, Clock
+  Play, Pause, Download, Eye, Clock, Copy
 } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -18,6 +19,7 @@ const props = defineProps({
 
 const tasks = useTaskStore()
 const { undoToast } = useToast()
+const { copyBlock } = useClipboard()
 const {
   isRecording,
   recordingTime,
@@ -408,6 +410,11 @@ function fileExt(name) {
           </button>
         </template>
 
+        <!-- Copy -->
+        <button class="block-copy" @click.stop="copyBlock(block)" title="Copy">
+          <Copy :size="11" />
+        </button>
+
         <!-- Delete -->
         <button class="block-delete" @click="deleteBlockWithUndo(block)">
           <X :size="12" />
@@ -466,7 +473,7 @@ function fileExt(name) {
   &:hover {
     background: rgba($violet-500, 0.03);
     .block-drag-handle { opacity: 0.5; }
-    .block-delete { opacity: 1; }
+    .block-delete, .block-copy { opacity: 1; }
     .block-due-trigger { opacity: 0.5; }
   }
 
@@ -673,6 +680,18 @@ function fileExt(name) {
   &:hover { color: $color-primary; background: $color-bg-hover; }
 }
 
+// ─── Copy button ───────────────────────────────────
+.block-copy {
+  @include btn-icon(20px);
+  color: $color-text-muted;
+  opacity: 0;
+  transition: all $transition-fast;
+  flex-shrink: 0;
+  margin-left: auto;
+
+  &:hover { color: $color-primary; background: rgba($color-primary, 0.1); }
+}
+
 // ─── Delete button ───────────────────────────────────
 .block-delete {
   @include btn-icon(20px);
@@ -680,7 +699,6 @@ function fileExt(name) {
   opacity: 0;
   transition: all $transition-fast;
   flex-shrink: 0;
-  margin-left: auto;
 
   &:hover { color: $rose-500; background: rgba($rose-500, 0.1); }
 }

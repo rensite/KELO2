@@ -3,14 +3,16 @@ import { computed } from 'vue'
 import { useTaskStore } from '../../stores/tasks.js'
 import { useSettingsStore } from '../../stores/settings.js'
 import { usePomodoroStore } from '../../stores/pomodoro.js'
+import { useAuthStore } from '../../stores/auth.js'
 import {
   Search, Menu, List, Columns3, Calendar, Grid2x2,
-  Keyboard, Download, BarChart3, Timer
+  Keyboard, Download, BarChart3, Timer, CloudOff, Cloud, LogOut
 } from 'lucide-vue-next'
 
 const tasks = useTaskStore()
 const settings = useSettingsStore()
 const pomodoro = usePomodoroStore()
+const auth = useAuthStore()
 
 const viewModes = [
   { id: 'list', icon: List, label: 'List' },
@@ -101,6 +103,24 @@ function onSearch(e) {
       <button class="header-icon-btn" @click="settings.toggleKeyboardHelp()" title="Keyboard shortcuts">
         <Keyboard :size="18" />
       </button>
+
+      <!-- Auth -->
+      <button
+        v-if="!auth.isSignedIn"
+        class="auth-chip"
+        @click="auth.openAuthModal()"
+        title="Войти, чтобы синхронизировать"
+      >
+        <CloudOff :size="14" />
+        <span>Войти</span>
+      </button>
+      <div v-else class="auth-chip auth-chip--signed" :title="auth.email">
+        <Cloud :size="14" />
+        <span class="auth-chip-email">{{ auth.email }}</span>
+        <button class="auth-signout" @click="auth.signOut()" title="Выйти">
+          <LogOut :size="13" />
+        </button>
+      </div>
     </div>
   </header>
 </template>
@@ -305,5 +325,49 @@ function onSearch(e) {
   &:hover { background: rgba(255, 255, 255, 0.15); color: white; }
 
   @include mobile { display: none; }
+}
+
+.auth-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-2;
+  padding: 6px 10px;
+  border-radius: $radius-full;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  cursor: pointer;
+  transition: background $transition-fast;
+  &:hover { background: rgba(255, 255, 255, 0.25); }
+
+  &--signed {
+    background: rgba($emerald-400, 0.25);
+    cursor: default;
+    &:hover { background: rgba($emerald-400, 0.25); }
+  }
+
+  .auth-chip-email {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    @include mobile { display: none; }
+  }
+}
+
+.auth-signout {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: $radius-full;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  cursor: pointer;
+  transition: background $transition-fast;
+  &:hover { background: rgba(255, 255, 255, 0.35); }
 }
 </style>

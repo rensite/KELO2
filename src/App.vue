@@ -1,8 +1,12 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useSettingsStore } from './stores/settings.js'
 import { useTaskStore } from './stores/tasks.js'
 import { useHistoryStore } from './stores/history.js'
+import { useAuthStore } from './stores/auth.js'
+import { startCloudSync, startAfterSignIn, isCloudEmpty } from './stores/plugins/syncSupabase.js'
+import AuthModal from './components/ui/AuthModal.vue'
+import SyncDialog from './components/ui/SyncDialog.vue'
 import AppHeader from './components/layout/AppHeader.vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import ListView from './components/views/ListView.vue'
@@ -18,6 +22,27 @@ import ImportExport from './components/ui/ImportExport.vue'
 const settings = useSettingsStore()
 const tasks = useTaskStore()
 const history = useHistoryStore()
+const auth = useAuthStore()
+const syncDialogOpen = ref(false)
+const syncCloudEmpty = ref(false)
+
+watch(() => auth.user?.id, async (id, prev) => {
+  if (id && id !== prev) {
+    auth.closeAuthModal()
+    const empty = await isCloudEmpty()
+    syncCloudEmpty.value = empty
+    if (empty && tasks.items.length === 0) {
+      await startAfterSignIn()
+    } else {
+      syncDialogOpen.value = true
+    }
+  }
+})
+
+async function onSyncDone() {
+  syncDialogOpen.value = false
+  await startAfterSignIn()
+}
 
 const viewComponents = {
   list: ListView,
@@ -90,6 +115,8 @@ function handleKeydown(e) {
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   tasks.migrateToBlocks()
+  auth.init()
+  startCloudSync()
   if (window.innerWidth <= 768) {
     settings.sidebarOpen = false
   }
@@ -125,6 +152,14 @@ onUnmounted(() => {
 
     <Transition name="fade">
       <ImportExport v-if="settings.importExportOpen" />
+    </Transition>
+
+    <Transition name="fade">
+      <AuthModal v-if="auth.authModalOpen" />
+    </Transition>
+
+    <Transition name="fade">
+      <SyncDialog v-if="syncDialogOpen" :cloud-empty="syncCloudEmpty" @done="onSyncDone" />
     </Transition>
 
     <ToastContainer />

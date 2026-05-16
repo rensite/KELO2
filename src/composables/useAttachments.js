@@ -1,4 +1,6 @@
 import { ref } from 'vue'
+import { useAuthStore } from '../stores/auth.js'
+import { uploadMedia, uploadBlob, getMediaUrl } from '../lib/storage.js'
 
 /**
  * Attachment types: image, video, audio, file
@@ -49,17 +51,29 @@ export function useAttachments() {
   const audioChunks = ref([])
 
   async function processFile(file) {
-    const dataUrl = await fileToBase64(file)
     const type = getAttachmentType(file.type)
+    const id = crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)
+    const auth = useAuthStore()
+
+    // Try cloud storage when signed in
+    let mediaPath = null
+    let url = null
+    if (auth.user) {
+      mediaPath = await uploadMedia(file, auth.user.id, id)
+      if (mediaPath) url = await getMediaUrl(mediaPath)
+    }
+    // Fallback: data URL (works offline / signed-out)
+    if (!url) url = await fileToBase64(file)
 
     return {
-      id: crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2),
+      id,
       type,
       name: file.name,
       size: file.size,
       sizeFormatted: formatFileSize(file.size),
       mimeType: file.type,
-      url: dataUrl,
+      url,
+      mediaPath,
       icon: getFileIcon(file.type, file.name),
       createdAt: new Date().toISOString(),
     }
@@ -114,23 +128,34 @@ export function useAttachments() {
 
       mediaRecorder.value.onstop = async () => {
         const blob = new Blob(audioChunks.value, { type: 'audio/webm' })
-        const reader = new FileReader()
-        reader.onload = () => {
-          const attachment = {
-            id: crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2),
-            type: 'audio',
-            name: `Recording ${new Date().toLocaleTimeString()}.webm`,
-            size: blob.size,
-            sizeFormatted: formatFileSize(blob.size),
-            mimeType: 'audio/webm',
-            url: reader.result,
-            icon: '🎙️',
-            duration: recordingTime.value,
-            createdAt: new Date().toISOString(),
-          }
-          resolve(attachment)
+        const id = crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)
+        const auth = useAuthStore()
+        let mediaPath = null
+        let url = null
+        if (auth.user) {
+          mediaPath = await uploadBlob(blob, auth.user.id, id, 'webm', 'audio/webm')
+          if (mediaPath) url = await getMediaUrl(mediaPath)
         }
-        reader.readAsDataURL(blob)
+        if (!url) {
+          url = await new Promise((res) => {
+            const r = new FileReader()
+            r.onload = () => res(r.result)
+            r.readAsDataURL(blob)
+          })
+        }
+        resolve({
+          id,
+          type: 'audio',
+          name: `Recording ${new Date().toLocaleTimeString()}.webm`,
+          size: blob.size,
+          sizeFormatted: formatFileSize(blob.size),
+          mimeType: 'audio/webm',
+          url,
+          mediaPath,
+          icon: '🎙️',
+          duration: recordingTime.value,
+          createdAt: new Date().toISOString(),
+        })
       }
 
       // Stop all tracks

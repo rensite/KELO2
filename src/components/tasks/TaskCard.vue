@@ -5,6 +5,7 @@ import { useSettingsStore } from '../../stores/settings.js'
 import { useHistoryStore } from '../../stores/history.js'
 import { usePomodoroStore } from '../../stores/pomodoro.js'
 import { useToast } from '../../composables/useToast.js'
+import { useClipboard } from '../../composables/useClipboard.js'
 import { useAI } from '../../composables/useAI.js'
 import { hashColor, hashColorLight } from '../../stores/utils.js'
 import { getUrlHostname, getFaviconUrl, parseTaskInput } from '../../composables/useTaskParser.js'
@@ -15,7 +16,7 @@ import {
   ChevronDown, ChevronRight, Plus, RotateCw, Timer,
   StickyNote, Edit3, Focus, MoreHorizontal, X,
   AlertCircle, Circle, CheckCircle2, ExternalLink, Link2,
-  Paperclip, Layers, Sparkles
+  Paperclip, Layers, Sparkles, Copy
 } from 'lucide-vue-next'
 
 const props = defineProps({ task: Object })
@@ -25,6 +26,7 @@ const settings = useSettingsStore()
 const history = useHistoryStore()
 const pomodoro = usePomodoroStore()
 const { undoToast } = useToast()
+const { copyTask } = useClipboard()
 const { isAvailable: aiAvailable, generateSummary: aiSummarize } = useAI()
 
 const generatingSummary = ref(false)
@@ -376,6 +378,9 @@ function dueDateClass(iso) {
         </button>
         <button class="action-btn" @click="startFocus" title="Focus mode">
           <Focus :size="15" />
+        </button>
+        <button class="action-btn" @click.stop="copyTask(task)" title="Copy task text">
+          <Copy :size="15" />
         </button>
         <button
           class="action-btn delete"
