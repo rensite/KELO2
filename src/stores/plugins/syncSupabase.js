@@ -323,6 +323,100 @@ function debouncedPull() {
   pullTimer = setTimeout(pullAll, 400)
 }
 
+// ----- smart merge (field-level LWW by updatedAt) -----
+/**
+ * Merge strategy:
+ *  - Tasks: union by id. On conflict — pick the one with newer `updatedAt`.
+ *    Blocks of the winning task come from that side.
+ *    If updatedAt is equal/missing, prefer the side with more blocks (richer).
+ *  - Categories: union by id. Cloud wins for `name/icon/color` on conflict
+ *    (no per-row timestamp tracked locally). Local-only ones added.
+ *  - Templates: union by id (built-in templates filtered out from merge).
+ *  - Settings: cloud wins (single-row, no granular timestamp tracking).
+ *
+ *  Returns: { tasks: {added, updatedLocal, updatedCloud}, categories, templates }
+ */
+export async function smartMerge(localBackup) {
+  const stats = {
+    tasks: { added: 0, updatedLocal: 0, updatedCloud: 0 },
+    categories: { added: 0 },
+    templates: { added: 0 },
+  }
+
+  await pullAll()
+
+  const tasksStore = useTaskStore()
+  const templatesStore = useTemplateStore()
+
+  // ---- tasks ----
+  const cloudTasksById = new Map(tasksStore.items.map(t => [t.id, t]))
+  const merged = []
+  const seen = new Set()
+
+  for (const cloudTask of tasksStore.items) {
+    const localTask = localBackup.tasks.find(t => t.id === cloudTask.id)
+    if (!localTask) { merged.push(cloudTask); seen.add(cloudTask.id); continue }
+    const lt = new Date(localTask.updatedAt || 0).getTime()
+    const ct = new Date(cloudTask.updatedAt || 0).getTime()
+    if (lt > ct) {
+      merged.push(localTask) // local wins → will push on next subscribe tick
+      stats.tasks.updatedLocal++
+    } else if (ct > lt) {
+      merged.push(cloudTask)
+      stats.tasks.updatedCloud++
+    } else {
+      // tie → prefer richer (more blocks)
+      const lb = (localTask.blocks || []).length
+      const cb = (cloudTask.blocks || []).length
+      merged.push(lb > cb ? localTask : cloudTask)
+    }
+    seen.add(cloudTask.id)
+  }
+  for (const localTask of localBackup.tasks) {
+    if (seen.has(localTask.id)) continue
+    merged.push(localTask)
+    stats.tasks.added++
+  }
+
+  // ---- categories ----
+  const cloudCatIds = new Set(tasksStore.categories.map(c => c.id))
+  const mergedCats = [...tasksStore.categories]
+  for (const lc of localBackup.categories || []) {
+    if (!cloudCatIds.has(lc.id)) {
+      mergedCats.push(lc)
+      stats.categories.added++
+    }
+  }
+
+  // ---- templates (skip builtIn) ----
+  const cloudTplIds = new Set(templatesStore.items.map(t => t.id))
+  const mergedTpls = [...templatesStore.items]
+  for (const lt of localBackup.templates || []) {
+    if (lt.builtIn) continue
+    if (!cloudTplIds.has(lt.id)) {
+      mergedTpls.push(lt)
+      stats.templates.added++
+    }
+  }
+
+  // apply (suppress push during write — final state will be pushed by next $subscribe tick)
+  suppressPush = true
+  try {
+    tasksStore.items = merged
+    tasksStore.categories = mergedCats
+    templatesStore.items = mergedTpls
+  } finally {
+    setTimeout(() => { suppressPush = false }, 50)
+  }
+
+  // Force a snapshot reset so push-diff sees the merge as the new baseline,
+  // then schedule a push so local-wins items propagate to cloud.
+  lastSnapshot = null
+  schedulePush()
+
+  return stats
+}
+
 // ----- empty-cloud check (for migration dialog) -----
 export async function isCloudEmpty() {
   const auth = useAuthStore()

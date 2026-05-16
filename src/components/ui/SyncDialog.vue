@@ -2,13 +2,15 @@
 import { ref } from 'vue'
 import { CloudUpload, CloudDownload, GitMerge, Loader2 } from 'lucide-vue-next'
 import { useTaskStore } from '../../stores/tasks.js'
-import { pullAll, pushAllLocal } from '../../stores/plugins/syncSupabase.js'
+import { useTemplateStore } from '../../stores/templates.js'
+import { pullAll, pushAllLocal, smartMerge } from '../../stores/plugins/syncSupabase.js'
 import { useToast } from '../../composables/useToast.js'
 
 const props = defineProps({ cloudEmpty: Boolean })
 const emit = defineEmits(['done'])
 
 const tasks = useTaskStore()
+const templates = useTemplateStore()
 const toast = useToast()
 const busy = ref(false)
 
@@ -37,17 +39,21 @@ async function chooseReplace() {
 }
 
 async function chooseMerge() {
-  // simple merge: pull cloud first, then push (keeps cloud as base, adds local missing)
   busy.value = true
   try {
-    // capture local before pull overwrites
-    const localBackup = JSON.parse(JSON.stringify(tasks.items))
-    await pullAll()
-    const existingIds = new Set(tasks.items.map(t => t.id))
-    for (const t of localBackup) {
-      if (!existingIds.has(t.id)) tasks.items.push(t)
+    const localBackup = {
+      tasks: JSON.parse(JSON.stringify(tasks.items)),
+      categories: JSON.parse(JSON.stringify(tasks.categories)),
+      templates: JSON.parse(JSON.stringify(templates.items)),
     }
-    toast.success('Данные объединены')
+    const s = await smartMerge(localBackup)
+    const parts = []
+    if (s.tasks.added) parts.push(`+${s.tasks.added} задач`)
+    if (s.tasks.updatedLocal) parts.push(`${s.tasks.updatedLocal} локальных новее`)
+    if (s.tasks.updatedCloud) parts.push(`${s.tasks.updatedCloud} из облака новее`)
+    if (s.categories.added) parts.push(`+${s.categories.added} категорий`)
+    if (s.templates.added) parts.push(`+${s.templates.added} шаблонов`)
+    toast.success('Объединено: ' + (parts.join(', ') || 'без изменений'))
     emit('done')
   } catch (e) {
     toast.error('Слияние не удалось: ' + e.message)
@@ -90,7 +96,7 @@ async function chooseMerge() {
           <GitMerge :size="22" />
           <div>
             <div class="sync-option-title">Объединить</div>
-            <div class="sync-option-desc">Облако + локальные (по id, без дубликатов)</div>
+            <div class="sync-option-desc">Новее побеждает (по updatedAt), уникальные добавляются</div>
           </div>
         </button>
 
