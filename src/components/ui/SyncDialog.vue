@@ -6,7 +6,10 @@ import { useTemplateStore } from '../../stores/templates.js'
 import { pullAll, pushAllLocal, smartMerge, migrateMediaToStorage } from '../../stores/plugins/syncSupabase.js'
 import { useToast } from '../../composables/useToast.js'
 
-const props = defineProps({ cloudEmpty: Boolean })
+const props = defineProps({
+  cloudEmpty: Boolean,
+  conflicts: { type: Array, default: () => [] },
+})
 const emit = defineEmits(['done'])
 
 const tasks = useTaskStore()
@@ -72,9 +75,22 @@ async function chooseMerge() {
       <p v-if="cloudEmpty" class="sync-sub">
         В облаке пусто. Залить локальные данные ({{ localCount }} задач)?
       </p>
+      <p v-else-if="conflicts.length" class="sync-sub">
+        Найдены конфликты ({{ conflicts.length }}): задачи менялись и локально, и в облаке —
+        автоматически решить нельзя. Выберите, какую сторону оставить.
+      </p>
       <p v-else class="sync-sub">
         В облаке уже есть данные. Что сделать с локальными ({{ localCount }} задач)?
       </p>
+
+      <ul v-if="conflicts.length" class="sync-conflict-list">
+        <li v-for="c in conflicts.slice(0, 8)" :key="c.id" class="sync-conflict-item">
+          {{ c.text }}
+        </li>
+        <li v-if="conflicts.length > 8" class="sync-conflict-more">
+          …и ещё {{ conflicts.length - 8 }}
+        </li>
+      </ul>
 
       <div class="sync-options">
         <button
@@ -161,6 +177,27 @@ async function chooseMerge() {
 }
 .sync-option-title { font-weight: $font-weight-semibold; font-size: $font-size-sm; }
 .sync-option-desc { font-size: $font-size-xs; color: $color-text-secondary; margin-top: 2px; }
+.sync-conflict-list {
+  list-style: none; padding: 0; margin: 0 0 $space-4;
+  max-height: 180px; overflow-y: auto;
+  border: 1px solid $color-border;
+  border-radius: $radius-md;
+  background: $color-bg;
+}
+.sync-conflict-item {
+  padding: $space-2 $space-3;
+  font-size: $font-size-sm;
+  color: $color-text-primary;
+  border-bottom: 1px solid $color-border;
+  &:last-child { border-bottom: none; }
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sync-conflict-more {
+  padding: $space-2 $space-3;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  font-style: italic;
+}
 .sync-busy {
   margin-top: $space-4; display: flex; align-items: center; gap: $space-2;
   color: $color-text-secondary; font-size: $font-size-sm;

@@ -343,6 +343,19 @@ export async function smartMerge(localBackup) {
     tasks: { added: 0, updatedLocal: 0, updatedCloud: 0 },
     categories: { added: 0 },
     templates: { added: 0 },
+    // Ambiguous conflicts: same id, same updatedAt, but content differs.
+    // LWW can't pick a winner here — surface to the user.
+    conflicts: [],
+  }
+
+  // Stable stringify ignoring volatile fields, for conflict detection.
+  const sigOf = (t) => {
+    const { updatedAt, createdAt, blocks, ...rest } = t || {}
+    const blockSig = (blocks || [])
+      .map(b => `${b.id}:${b.type}:${b.text ?? b.content ?? ''}:${b.mediaPath ?? ''}:${b.completed ?? ''}`)
+      .sort()
+      .join('|')
+    return JSON.stringify(rest) + '||' + blockSig
   }
 
   await pullAll()
@@ -367,6 +380,17 @@ export async function smartMerge(localBackup) {
       merged.push(cloudTask)
       stats.tasks.updatedCloud++
     } else {
+      // tie on updatedAt → only a real conflict if content actually differs
+      const lSig = sigOf(localTask)
+      const cSig = sigOf(cloudTask)
+      if (lSig !== cSig) {
+        stats.conflicts.push({
+          id: cloudTask.id,
+          text: cloudTask.text || localTask.text || '(без названия)',
+          local: localTask,
+          cloud: cloudTask,
+        })
+      }
       // tie → prefer richer (more blocks)
       const lb = (localTask.blocks || []).length
       const cb = (cloudTask.blocks || []).length

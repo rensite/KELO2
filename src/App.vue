@@ -4,7 +4,16 @@ import { useSettingsStore } from './stores/settings.js'
 import { useTaskStore } from './stores/tasks.js'
 import { useHistoryStore } from './stores/history.js'
 import { useAuthStore } from './stores/auth.js'
-import { startCloudSync, startAfterSignIn, isCloudEmpty } from './stores/plugins/syncSupabase.js'
+import {
+  startCloudSync,
+  startAfterSignIn,
+  isCloudEmpty,
+  smartMerge,
+  pushAllLocal,
+  migrateMediaToStorage,
+} from './stores/plugins/syncSupabase.js'
+import { useTemplateStore } from './stores/templates.js'
+import { useToast } from './composables/useToast.js'
 import AuthModal from './components/ui/AuthModal.vue'
 import SyncDialog from './components/ui/SyncDialog.vue'
 import AppHeader from './components/layout/AppHeader.vue'
@@ -23,24 +32,78 @@ const settings = useSettingsStore()
 const tasks = useTaskStore()
 const history = useHistoryStore()
 const auth = useAuthStore()
+const templates = useTemplateStore()
+const toast = useToast()
 const syncDialogOpen = ref(false)
 const syncCloudEmpty = ref(false)
+const syncConflicts = ref([])
 
 watch(() => auth.user?.id, async (id, prev) => {
-  if (id && id !== prev) {
-    auth.closeAuthModal()
+  if (!id || id === prev) return
+  auth.closeAuthModal()
+
+  try {
     const empty = await isCloudEmpty()
     syncCloudEmpty.value = empty
+
+    // Case 1: cloud empty, nothing local → just start sync.
     if (empty && tasks.items.length === 0) {
       await startAfterSignIn()
-    } else {
-      syncDialogOpen.value = true
+      return
     }
+
+    // Case 2: cloud empty, local has data → push local silently.
+    if (empty) {
+      await migrateMediaToStorage()
+      await pushAllLocal()
+      await startAfterSignIn()
+      toast.success(`Локальные данные загружены в облако (${tasks.items.length} задач)`)
+      return
+    }
+
+    // Case 3: cloud has data, local empty → pull silently.
+    if (tasks.items.length === 0) {
+      await startAfterSignIn()
+      toast.success('Данные загружены из облака')
+      return
+    }
+
+    // Case 4: both have data → smart-merge in background.
+    // Only surface the dialog if there are genuine conflicts LWW can't resolve.
+    const localBackup = {
+      tasks: JSON.parse(JSON.stringify(tasks.items)),
+      categories: JSON.parse(JSON.stringify(tasks.categories)),
+      templates: JSON.parse(JSON.stringify(templates.items)),
+    }
+    await migrateMediaToStorage()
+    const s = await smartMerge(localBackup)
+
+    if (s.conflicts && s.conflicts.length > 0) {
+      syncConflicts.value = s.conflicts
+      syncDialogOpen.value = true
+      return
+    }
+
+    const parts = []
+    if (s.tasks.added) parts.push(`+${s.tasks.added} задач`)
+    if (s.tasks.updatedLocal) parts.push(`${s.tasks.updatedLocal} локальных новее`)
+    if (s.tasks.updatedCloud) parts.push(`${s.tasks.updatedCloud} из облака новее`)
+    if (s.categories.added) parts.push(`+${s.categories.added} категорий`)
+    if (s.templates.added) parts.push(`+${s.templates.added} шаблонов`)
+    if (parts.length) toast.success('Синхронизировано: ' + parts.join(', '))
+
+    await startAfterSignIn()
+  } catch (e) {
+    console.warn('[sync] auto-merge failed, falling back to dialog', e)
+    toast.error('Автосинхронизация не удалась — выберите вручную')
+    syncConflicts.value = []
+    syncDialogOpen.value = true
   }
 })
 
 async function onSyncDone() {
   syncDialogOpen.value = false
+  syncConflicts.value = []
   await startAfterSignIn()
 }
 
@@ -159,7 +222,12 @@ onUnmounted(() => {
     </Transition>
 
     <Transition name="fade">
-      <SyncDialog v-if="syncDialogOpen" :cloud-empty="syncCloudEmpty" @done="onSyncDone" />
+      <SyncDialog
+        v-if="syncDialogOpen"
+        :cloud-empty="syncCloudEmpty"
+        :conflicts="syncConflicts"
+        @done="onSyncDone"
+      />
     </Transition>
 
     <ToastContainer />
