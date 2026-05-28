@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 
 export default defineConfig({
-  base: process.env.GITHUB_PAGES ? '/KELO2/' : '/',
+  base: '/',
   plugins: [vue()],
   resolve: {
     alias: {
