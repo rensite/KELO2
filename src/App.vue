@@ -52,7 +52,7 @@ watch(() => auth.user?.id, async (id, prev) => {
       return
     }
 
-    // Case 2: cloud empty, local has data → push local silently.
+    // Case 2: cloud empty, local has data → push local silently
     if (empty) {
       await migrateMediaToStorage()
       await pushAllLocal()
